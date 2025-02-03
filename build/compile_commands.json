@@ -1,8 +1,0 @@
-[
-{
-  "directory": "/media/mikhail/Files/Projects/libradp/build",
-  "command": "/usr/bin/c++   -g -o CMakeFiles/libradp.dir/main.cpp.o -c /media/mikhail/Files/Projects/libradp/main.cpp",
-  "file": "/media/mikhail/Files/Projects/libradp/main.cpp",
-  "output": "CMakeFiles/libradp.dir/main.cpp.o"
-}
-]
