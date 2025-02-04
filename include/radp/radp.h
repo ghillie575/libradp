@@ -17,6 +17,8 @@ void logInfo(std::string message) {
 void logError(std::string message) {
     std::cerr << "[ERROR] " << message << std::endl;
 }
+void trimMessage(std::string& message) ;
+void sendMessage(int socket, std::string message);
     class RADPServerClient {
         private:
             int m_port;

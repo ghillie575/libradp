@@ -1,7 +1,15 @@
 #include <radp/radp.h>
+#include <string>
+#include <sstream>
+#include <sys/stat.h>
 namespace ghillie575 {
 
-
+void trimMessage(std::string& message) {
+     message.erase(message.find_last_not_of(" \n\r\t") + 1);
+}
+void sendMessage(int socket, std::string message) {
+    send(socket, message.c_str(), message.size(), 0);
+}
 RADPServer::RADPServer(int port) {
     struct sockaddr_in serverAddr, clientAddr;
     socklen_t addrLen = sizeof(clientAddr);
@@ -66,12 +74,41 @@ void RADPServerClient::handle(int socket) {
     while ((bytesRead = read(socket, buffer, sizeof(buffer) - 1)) > 0) {
         buffer[bytesRead] = '\0'; // Null-terminate the string
         logClient(id, std::string(buffer));
-        if (std::string(buffer) == "exit") {
+        std::string message(buffer);
+        trimMessage(message);
+        if (message == "exit") {
+            sendMessage(socket, "DISCONNECTED\n");
             break;
+        }else if(message == "hello") {
+            sendMessage(socket, "HELLO\n");
         }
-
-        // Echo the message back to the client
-        send(socket, buffer, bytesRead, 0);
+        else if (message == "getf")
+        {
+            std::istringstream iss(message);
+            std::string command;
+            std::string arg;
+            if (std::getline(iss, command, ' ') && std::getline(iss, arg, ' ')) {
+                if (command == "getf" && !arg.empty()) {
+                    std::string fileLocation = "/home/mikhail/RADP/" + arg;
+                    
+                    struct stat buffer1;
+                    if (stat(fileLocation.c_str(), &buffer1) == 0) {
+                        std::string extension = arg.substr(arg.find_last_of('.') + 1);
+                        std::string fileName = arg.substr(0, arg.find_last_of('.'));
+                        sendMessage(socket, "FILE " + fileName + " " + extension + " " + std::to_string(buffer1.st_size) + "\n");
+                    }
+                    else
+                    {
+                        sendMessage(socket, "NF\n");
+                    }
+                }
+        }else
+        {
+            sendMessage(socket, "UKN\n");
+        }
+        
+        
+    }
     }
 
     if (bytesRead < 0) {
