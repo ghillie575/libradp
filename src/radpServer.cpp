@@ -2,7 +2,6 @@
 #include <string>
 #include <sstream>
 #include <sys/stat.h>
-#include <dirent.h>
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -13,6 +12,7 @@
 #define read _read
 #define close closesocket
 #else
+#include <dirent.h>
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -131,8 +131,8 @@ namespace ghillie575
                     return;
                 }
 
-                FILE *file = fopen(path.c_str(), "rb");
-                if (file == NULL)
+                std::ifstream fileStream(path, std::ios::binary);
+                if (!fileStream)
                 {
                     sendMessage(socket, "NF\n");
                 }
@@ -140,22 +140,22 @@ namespace ghillie575
                 {
                     sendMessage(socket, "DLST\n");
                     sleep(1); // Wait for client to prepare for download
-                    fseek(file, 0, SEEK_END);
-                    long fileSize = ftell(file);
-                    rewind(file);
+                    fileStream.seekg(0, std::ios::end);
+                    long fileSize = fileStream.tellg();
+                    fileStream.seekg(0, std::ios::beg);
 
                     const size_t chunkSize = 1024; // Define the chunk size
                     std::vector<char> buffer(chunkSize);
-                    size_t bytesRead;
                     long totalBytesSent = 0;
                     char ackBuffer[1024];
-                    while ((bytesRead = fread(buffer.data(), 1, chunkSize, file)) > 0)
+                    while (fileStream.read(buffer.data(), chunkSize) || fileStream.gcount() > 0)
                     {
+                        size_t bytesRead = fileStream.gcount();
                         // Create header with progress information
                         std::string header = "radpdl# " + std::to_string(totalBytesSent) + " " + std::to_string(fileSize) + " " + std::to_string(chunkSize) + " " + filename + " #radpdl";
                         logClient(socket, "Chunk send: " + header + "\n");
                         send(socket, header.c_str(), header.size(), 0);
-                        
+
                         send(socket, buffer.data(), bytesRead, 0);
                         totalBytesSent += bytesRead;
                         // Wait for client to send "OK"
@@ -173,54 +173,9 @@ namespace ghillie575
 
                     logClient(socket, "File send finished");
                     sendMessage(socket, "DLF");
-                    fclose(file);
+                    fileStream.close();
                     sendMessage(socket, "DISCONNECTED\n");
                 }
-            std::ifstream fileStream(path, std::ios::binary);
-            if (!fileStream)
-            {
-                sendMessage(socket, "NF\n");
-            }
-            else
-            {
-                sendMessage(socket, "DLST\n");
-                sleep(1); // Wait for client to prepare for download
-                fileStream.seekg(0, std::ios::end);
-                long fileSize = fileStream.tellg();
-                fileStream.seekg(0, std::ios::beg);
-
-                const size_t chunkSize = 1024; // Define the chunk size
-                std::vector<char> buffer(chunkSize);
-                long totalBytesSent = 0;
-                char ackBuffer[1024];
-                while (fileStream.read(buffer.data(), chunkSize) || fileStream.gcount() > 0)
-                {
-                    size_t bytesRead = fileStream.gcount();
-                    // Create header with progress information
-                    std::string header = "radpdl# " + std::to_string(totalBytesSent) + " " + std::to_string(fileSize) + " " + std::to_string(chunkSize) + " " + filename + " #radpdl";
-                    logClient(socket, "Chunk send: " + header + "\n");
-                    send(socket, header.c_str(), header.size(), 0);
-                    
-                    send(socket, buffer.data(), bytesRead, 0);
-                    totalBytesSent += bytesRead;
-                    // Wait for client to send "OK"
-                    while ((bytesRead = read(socket, ackBuffer, sizeof(ackBuffer) - 1)) > 0)
-                    {
-                        ackBuffer[bytesRead] = '\0'; // Null-terminate the string
-                        std::string message(ackBuffer);
-                        trimMessage(message);
-                        if (message == "OK")
-                        {
-                            break;
-                        }
-                    }
-                }
-
-                logClient(socket, "File send finished");
-                sendMessage(socket, "DLF");
-                fileStream.close();
-                sendMessage(socket, "DISCONNECTED\n");
-            }
             }
         }
         else if (command == "GETF")
