@@ -90,8 +90,10 @@ namespace ghillie575
                         if (!outputFile)
                         {
                             std::cerr << "Error writing to file" << std::endl;
+                        }else{
+                            sendMessage("OK\n");
                         }
-                        sendMessage("OK\n");
+                        
                     }
                 }
                     

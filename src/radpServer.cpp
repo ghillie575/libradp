@@ -140,9 +140,9 @@ namespace ghillie575
                         std::string header = "radpdl# " + std::to_string(totalBytesSent) + " " + std::to_string(fileSize) + " " + std::to_string(chunkSize) + " " + filename + " #radpdl";
                         logClient(socket, "Chunk send: " + header + "\n");
                         send(socket, header.c_str(), header.size(), 0);
+                        
                         send(socket, buffer, bytesRead, 0);
                         totalBytesSent += bytesRead;
-
                         // Wait for client to send "OK"
                         while ((bytesRead = read(socket, buffer1, sizeof(buffer1) - 1)) > 0)
                         {
@@ -154,6 +154,7 @@ namespace ghillie575
                                 break;
                             }
                         }
+                        
                     }
 
                     logClient(socket, "File send finished");
