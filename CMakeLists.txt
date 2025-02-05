@@ -16,12 +16,10 @@ file(GLOB_RECURSE SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
 add_library(radp SHARED ${SRC})
 
 # Add executables
-add_executable(radp_test main.cpp)
-add_executable(radp_test_c main-c.cpp)
+add_executable(radp_test main.cpp ${SRC})
+add_executable(radp_test_c main-c.cpp ${SRC})
 
 # Link libraries
-target_link_libraries(radp_test PRIVATE radp)
-target_link_libraries(radp_test_c PRIVATE radp)
 
 # Include directories for targets
 target_include_directories(radp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
