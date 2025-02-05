@@ -2,22 +2,24 @@
 #include <iomanip>
 namespace ghillie575
 {
-    void  RADPClient::printProgressBar(double percentage,std::string message) {
-    int barWidth = 50; // Width of the progress bar
-    std::cout << "\r" << message  <<" ["; // Carriage return to overwrite the line
+    void RADPClient::printProgressBar(double percentage, std::string message)
+    {
+        int barWidth = 50;                    // Width of the progress bar
+        std::cout << "\r" << message << " ["; // Carriage return to overwrite the line
 
-    int pos = static_cast<int>(barWidth * (percentage / 100.0));
-    for (int i = 0; i < barWidth; ++i) {
-        if (i < pos)
-            std::cout << "=";
-        else if (i == pos)
-            std::cout << ">";
-        else
-            std::cout << " ";
+        int pos = static_cast<int>(barWidth * (percentage / 100.0));
+        for (int i = 0; i < barWidth; ++i)
+        {
+            if (i < pos)
+                std::cout << "=";
+            else if (i == pos)
+                std::cout << ">";
+            else
+                std::cout << " ";
+        }
+
+        std::cout << "] " << std::fixed << std::setprecision(2) << percentage << "% " << std::flush;
     }
-
-    std::cout << "] " << std::fixed << std::setprecision(2) << percentage << "% " << std::flush;
-}
 
     RADPClient::RADPClient(const std::string &serverAddress, int port)
         : serverAddress(serverAddress), port(port), downloading(false)
@@ -94,6 +96,7 @@ namespace ghillie575
         int dlSizeCurrent = 0;
         char buffer[(1024 * 1024)];
         std::ofstream outputFile;
+
         while (connected)
         {
             ssize_t bytesRead = recv(socket, buffer, sizeof(buffer), 0);
@@ -111,6 +114,7 @@ namespace ghillie575
                 {
                     outputFile.close();
                 }
+                sendMessage("OK\n");
             }
             else if (downloading)
             {
@@ -122,7 +126,9 @@ namespace ghillie575
                     dlSizeTotal = processHeader(header, &outputFile);
                     data = data.substr(headerEnd + 6);
                 }
-                else if (outputFile.is_open())
+
+                // Write data to file immediately
+                if (outputFile.is_open())
                 {
                     outputFile.write(data.c_str(), data.size());
                     if (!outputFile)
@@ -130,10 +136,11 @@ namespace ghillie575
                         std::cerr << "Error writing to file" << std::endl;
                     }
                     dlSizeCurrent += data.size();
+
                     if (dlSizeTotal > 0)
                     { // Prevent division by zero
                         double percentage = (static_cast<double>(dlSizeCurrent) / dlSizeTotal) * 100;
-                        printProgressBar(percentage,"Downloading");
+                        printProgressBar(percentage, "Downloading");
                     }
                     else
                     {

@@ -31,6 +31,26 @@ namespace ghillie575
     void setRadpServerDir(std::string dir);
     void trimMessage(std::string &message);
     void sendMessage(int socket, std::string message);
+    enum class RADPCommand
+    {
+        EXIT,
+        LS,
+        GETS,
+        GETF,
+        DISCONNECTED,
+        OK,
+        ERR,
+        NF,
+        FILE,
+        ACSDN,
+        DLF,
+        DLST,
+        DL,
+        UKN
+    };
+    std::string commandToString(RADPCommand command);
+    RADPCommand stringToCommand(const std::string &str);
+    void sendMessage(int socket, RADPCommand command);
     class RADPServerClient
     {
     private:
