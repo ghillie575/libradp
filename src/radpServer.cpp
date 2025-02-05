@@ -20,7 +20,7 @@
 #endif
 namespace ghillie575
 {
-    std::string radpServerDir = "./";
+    std::string radpServerDir = ".";
     void logClient(int id, std::string message)
     {
         std::cout << "[CLIENT " << id << "] " << message << std::endl;
@@ -56,60 +56,159 @@ namespace ghillie575
         }
         return tokens;
     }
+    void RADPServerClient::serverDownload(int socket, std::string filename)
+    {
+        std::string path = radpServerDir + "/" + filename;
 
-    void processCommand(int socket, const std::string &command, const std::vector<std::string> &args)
+        // Check if the file path attempts to access parent directory
+        if (path.find("..") != std::string::npos)
+        {
+            sendMessage(socket, "ACSDN\n");
+            return;
+        }
+        std::cout << "Serving file: " << path << std::endl;
+        std::ifstream fileStream(path, std::ios::binary);
+        if (!fileStream)
+        {
+            sendMessage(socket, "NF\n");
+        }
+        else
+        {
+            sendMessage(socket, "DLST\n");
+            sleep(1); // Wait for client to prepare for download
+            fileStream.seekg(0, std::ios::end);
+            long fileSize = fileStream.tellg();
+            fileStream.seekg(0, std::ios::beg);
+
+            const size_t chunkSize = 1024; // Define the chunk size
+            std::vector<char> buffer(chunkSize);
+            long totalBytesSent = 0;
+
+            while (fileStream.read(buffer.data(), chunkSize) || fileStream.gcount() > 0)
+            {
+                size_t bytesRead = fileStream.gcount();
+                // Create header with progress information
+                std::string header = "radpdl# " + std::to_string(totalBytesSent) + " " + std::to_string(fileSize) + " " + std::to_string(chunkSize) + " " + filename + " #radpdl";
+                logClient(socket, "Chunk send: " + header + "\n");
+                send(socket, header.c_str(), header.size(), 0);
+
+                send(socket, buffer.data(), bytesRead, 0);
+                totalBytesSent += bytesRead;
+                // Wait for client to send "OK"
+                waitForClient(socket);
+            }
+
+            logClient(socket, "File send finished");
+            sendMessage(socket, "DLF");
+            fileStream.close();
+        }
+    }
+    void RADPServerClient::onDownload()
+    {
+    }
+    void RADPServerClient::waitForClient(int socket)
+    {
+        char buffer[1024];
+        size_t bytesRead;
+        while ((bytesRead = read(socket, buffer, sizeof(buffer) - 1)) > 0)
+        {
+            buffer[bytesRead] = '\0'; // Null-terminate the string
+            std::string message(buffer);
+            trimMessage(message);
+            if (message == "OK")
+            {
+                break;
+            }
+        }
+    }
+    void RADPServerClient::serverListFiles(int socket)
+    {
+
+        std::string result = "";
+        struct stat fileStat;
+        DIR *dir;
+        struct dirent *ent;
+        if ((dir = opendir(radpServerDir.c_str())) != NULL)
+        {
+            while ((ent = readdir(dir)) != NULL)
+            {
+                if (stat(ent->d_name, &fileStat) == -1)
+                {
+                    continue;
+                }
+                result += ent->d_name;
+                result += "\n";
+            }
+            closedir(dir);
+        }
+        sendMessage(socket, result);
+    }
+    void RADPServerClient::serverGetFileInfo(int socket, std::string filename)
+    {
+        std::string fullPath = radpServerDir + "/" + filename;
+        struct stat fileStat;
+        if (stat(fullPath.c_str(), &fileStat) == 0)
+        {
+            if (S_ISREG(fileStat.st_mode))
+            {
+                sendMessage(socket, "FILE " + std::to_string(fileStat.st_size) + "\n");
+            }
+            else
+            {
+                sendMessage(socket, "NF\n");
+            }
+        }
+        else
+        {
+            sendMessage(socket, "NF\n");
+        }
+    }
+    void RADPServerClient::disconnect(int socket)
+    {
+        connected = false;
+        sendMessage(socket, "DISCONNECTED\n");
+    }
+    void RADPServerClient::serverReadString(int socket, std::string filename)
+    {
+        std::string path = radpServerDir + filename;
+        if (path.find("..") != std::string::npos)
+        {
+            sendMessage(socket, "ACSDN\n");
+            return;
+        }
+        FILE *file = fopen(path.c_str(), "r");
+        if (file == NULL)
+        {
+            sendMessage(socket, "NF\n");
+        }
+        else
+        {
+            fseek(file, 0, SEEK_END);
+            long fileSize = ftell(file);
+            rewind(file);
+            char *buffer = (char *)malloc(fileSize);
+            fread(buffer, 1, fileSize, file);
+            sendMessage(socket, std::string(buffer));
+            fclose(file);
+        }
+        
+    }
+    void RADPServerClient::processCommand(int socket, const std::string &command, const std::vector<std::string> &args)
     {
         if (command == "EXIT")
         {
-            sendMessage(socket, "DISCONNECTED\n");
+            disconnect(socket);
         }
         else if (command == "LS")
         {
-            std::string result = "";
-            struct stat fileStat;
-            DIR *dir;
-            struct dirent *ent;
-            if ((dir = opendir(radpServerDir.c_str())) != NULL)
-            {
-                while ((ent = readdir(dir)) != NULL)
-                {
-                    if (stat(ent->d_name, &fileStat) == -1)
-                    {
-                        continue;
-                    }
-                    result += ent->d_name;
-                    result += "\n";
-                }
-                closedir(dir);
-            }
-            sendMessage(socket, result);
+            serverListFiles(socket);
         }
         else if (command == "GETS")
         {
             if (args.size() == 1)
             {
                 std::string filename = args[0];
-                std::string path = radpServerDir + filename;
-                if (path.find("..") != std::string::npos)
-                {
-                    sendMessage(socket, "ACSDN\n");
-                    return;
-                }
-                FILE *file = fopen(path.c_str(), "r");
-                if (file == NULL)
-                {
-                    sendMessage(socket, "NF\n");
-                }
-                else
-                {
-                    fseek(file, 0, SEEK_END);
-                    long fileSize = ftell(file);
-                    rewind(file);
-                    char *buffer = (char *)malloc(fileSize);
-                    fread(buffer, 1, fileSize, file);
-                    sendMessage(socket, std::string(buffer));
-                    fclose(file);
-                }
+                serverReadString(socket, filename);
             }
 
             else
@@ -122,60 +221,9 @@ namespace ghillie575
             if (args.size() == 1)
             {
                 std::string filename = args[0];
-                std::string path = radpServerDir + "/" + filename;
-
-                // Check if the file path attempts to access parent directory
-                if (path.find("..") != std::string::npos)
-                {
-                    sendMessage(socket, "ACSDN\n");
-                    return;
-                }
-
-                std::ifstream fileStream(path, std::ios::binary);
-                if (!fileStream)
-                {
-                    sendMessage(socket, "NF\n");
-                }
-                else
-                {
-                    sendMessage(socket, "DLST\n");
-                    sleep(1); // Wait for client to prepare for download
-                    fileStream.seekg(0, std::ios::end);
-                    long fileSize = fileStream.tellg();
-                    fileStream.seekg(0, std::ios::beg);
-
-                    const size_t chunkSize = 1024; // Define the chunk size
-                    std::vector<char> buffer(chunkSize);
-                    long totalBytesSent = 0;
-                    char ackBuffer[1024];
-                    while (fileStream.read(buffer.data(), chunkSize) || fileStream.gcount() > 0)
-                    {
-                        size_t bytesRead = fileStream.gcount();
-                        // Create header with progress information
-                        std::string header = "radpdl# " + std::to_string(totalBytesSent) + " " + std::to_string(fileSize) + " " + std::to_string(chunkSize) + " " + filename + " #radpdl";
-                        logClient(socket, "Chunk send: " + header + "\n");
-                        send(socket, header.c_str(), header.size(), 0);
-
-                        send(socket, buffer.data(), bytesRead, 0);
-                        totalBytesSent += bytesRead;
-                        // Wait for client to send "OK"
-                        while ((bytesRead = read(socket, ackBuffer, sizeof(ackBuffer) - 1)) > 0)
-                        {
-                            ackBuffer[bytesRead] = '\0'; // Null-terminate the string
-                            std::string message(ackBuffer);
-                            trimMessage(message);
-                            if (message == "OK")
-                            {
-                                break;
-                            }
-                        }
-                    }
-
-                    logClient(socket, "File send finished");
-                    sendMessage(socket, "DLF");
-                    fileStream.close();
-                    sendMessage(socket, "DISCONNECTED\n");
-                }
+                onDownload();
+                serverDownload(socket, filename);
+                disconnect(socket);
             }
         }
         else if (command == "GETF")
@@ -183,6 +231,7 @@ namespace ghillie575
             if (args.empty())
             {
                 sendMessage(socket, "ERR\n");
+                
                 return;
             }
             std::string filePath = args[0];
@@ -193,35 +242,7 @@ namespace ghillie575
                 sendMessage(socket, "ACSDN\n");
                 return;
             }
-
-            std::string fullPath = radpServerDir + "/" + filePath;
-            struct stat fileStat;
-            if (stat(fullPath.c_str(), &fileStat) == 0)
-            {
-                if (S_ISREG(fileStat.st_mode))
-                {
-                    sendMessage(socket, "FILE " + std::to_string(fileStat.st_size) + "\n");
-                }
-                else
-                {
-                    sendMessage(socket, "NF\n");
-                }
-            }
-            else
-            {
-                sendMessage(socket, "NF\n");
-            }
-        }
-        else if (command == "HELLO")
-        {
-            sendMessage(socket, "HELLO\n");
-        }
-        else if (command == "OK")
-        {
-        }
-        else
-        {
-            sendMessage(socket, "UKN\n");
+            serverGetFileInfo(socket, filePath);
         }
     }
     RADPServer::RADPServer(int port)
@@ -286,18 +307,21 @@ namespace ghillie575
     RADPServerClient::RADPServerClient(int buffer_size)
     {
         this->buffer_size = buffer_size;
+
     }
 
     RADPServerClient::~RADPServerClient()
     {
     }
+
     void RADPServerClient::handle(int socket)
     {
         char buffer[buffer_size];
         int bytesRead;
 
         // Communicate with the client
-        while ((bytesRead = read(socket, buffer, sizeof(buffer) - 1)) > 0)
+        connected = true;
+        while (((bytesRead = read(socket, buffer, sizeof(buffer) - 1)) > 0) && connected)
         {
             buffer[bytesRead] = '\0'; // Null-terminate the string
             logClient(id, std::string(buffer));

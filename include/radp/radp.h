@@ -37,13 +37,22 @@ namespace ghillie575
         int m_port;
 
         int buffer_size = 1024;
+        bool connected = false;
+        void processCommand(int socket, const std::string &command, const std::vector<std::string> &args);
+        void serverDownload(int socket, std::string filename);
+        void onDownload();
+        void waitForClient(int socket);
+        void serverListFiles(int socket);
+        void serverGetFileInfo(int socket, std::string filename);
+        void disconnect(int socket);
+        void serverReadString(int socket, std::string filename);
 
     public:
         int id;
         RADPServerClient(int buffer_size);
         ~RADPServerClient();
         void handle(int socket);
-    };
+        };
     class RADPServer
     {
     private:
@@ -71,6 +80,7 @@ namespace ghillie575
         void downloadFile(const std::string &filename);
         void listFiles();
         void getFileInfo(const std::string &filename);
+        
         bool connected = false;
 
     private:
@@ -79,7 +89,7 @@ namespace ghillie575
         int port;
         bool downloading;
         std::thread receiverThread;
-
+        void waitForServer();
         void connectToServer();
         void sendMessage(const std::string &message);
         std::vector<std::string> splitMessage(const std::string &message);

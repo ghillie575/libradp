@@ -18,9 +18,6 @@ add_library(radp SHARED ${SRC})
 # Add executables
 add_executable(radp_test main.cpp ${SRC})
 add_executable(radp_test_c main-c.cpp ${SRC})
-
-# Link libraries
-
 # Include directories for targets
 target_include_directories(radp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(radp_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)

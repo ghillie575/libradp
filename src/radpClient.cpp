@@ -16,7 +16,21 @@ namespace ghillie575
         }
         close(socket);
     }
-
+    void RADPClient::waitForServer()
+    {
+        char buffer[1024];
+        size_t bytesRead;
+        while ((bytesRead = read(socket, buffer, sizeof(buffer) - 1)) > 0)
+        {
+            buffer[bytesRead] = '\0'; // Null-terminate the string
+            std::string message(buffer);
+            trimMessage(message);
+            if (message == "OK")
+            {
+                break;
+            }
+        }
+    }
     void RADPClient::connectToServer()
     {
         socket = ::socket(AF_INET, SOCK_STREAM, 0);
@@ -43,7 +57,7 @@ namespace ghillie575
     void RADPClient::sendMessage(const std::string &message)
     {
         send(socket, message.c_str(), message.size(), 0);
-    }
+    } 
 
     std::vector<std::string> RADPClient::splitMessage(const std::string &message)
     {
@@ -60,7 +74,7 @@ namespace ghillie575
     {
         char buffer[2048];
         std::ofstream outputFile;
-        while (true)
+        while (connected)
         {
             ssize_t bytesRead = recv(socket, buffer, sizeof(buffer), 0);
             if (bytesRead <= 0)
@@ -115,6 +129,7 @@ namespace ghillie575
                 trimMessage(data);
                 if (data == "DISCONNECTED")
                 {
+                    connected = false;
                     break;
                 }
                 else if (data == "ACSDN")
@@ -145,6 +160,7 @@ namespace ghillie575
             outputFile.close();
         }
         connected = false;
+        std::cout << "Disconnected from server\n";
     }
 
     void RADPClient::processHeader(const std::string &header, std::ofstream *outputFile)
