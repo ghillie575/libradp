@@ -29,7 +29,7 @@ jobs:
       name: executables
       path: build/
 
-    build-windows:
+  build-windows:
     runs-on: windows-latest
 
     steps:
