@@ -1,16 +1,20 @@
 #include <functional>
 #include <iostream>
 #include <cstring>
-#include <unistd.h>
-#include <arpa/inet.h>
 #include <thread>
 #include <vector>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <unistd.h>
 #include <sstream>
-#include <iostream>
 #include <fstream>
+
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#pragma comment(lib, "ws2_32.lib")
+#else
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#endif
 #ifndef RADP_H
 #define RADP_H
 

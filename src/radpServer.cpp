@@ -3,6 +3,21 @@
 #include <sstream>
 #include <sys/stat.h>
 #include <dirent.h>
+
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <windows.h>
+#include <io.h>
+#define sleep(x) Sleep(1000 * (x))
+#define read _read
+#define close closesocket
+#else
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#endif
 namespace ghillie575
 {
     std::string radpServerDir = "./";
