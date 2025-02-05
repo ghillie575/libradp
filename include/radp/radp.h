@@ -94,7 +94,8 @@ namespace ghillie575
         void sendMessage(const std::string &message);
         std::vector<std::string> splitMessage(const std::string &message);
         void receiveData();
-        void processHeader(const std::string &header, std::ofstream *outputFile);
+        long processHeader(const std::string &header, std::ofstream *outputFile);
+        void printProgressBar(double percentage,std::string message);
     };
 }
 

@@ -17,6 +17,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <chrono>
 #endif
 namespace ghillie575
 {
@@ -80,22 +81,20 @@ namespace ghillie575
             long fileSize = fileStream.tellg();
             fileStream.seekg(0, std::ios::beg);
 
-            const size_t chunkSize = 1024; // Define the chunk size
+            const size_t chunkSize = (1024 * 1024) * 10; // Define the chunk size
             std::vector<char> buffer(chunkSize);
             long totalBytesSent = 0;
-
+            std::string header = "##dl## " + std::to_string(fileSize) + " " + filename + " ##dl##";
+            logClient(socket, "Header sent: " + header + "\n");
+            send(socket, header.c_str(), header.size(), 0);
+            sleep(1); // Wait for client to prepare for download
             while (fileStream.read(buffer.data(), chunkSize) || fileStream.gcount() > 0)
             {
                 size_t bytesRead = fileStream.gcount();
-                // Create header with progress information
-                std::string header = "radpdl# " + std::to_string(totalBytesSent) + " " + std::to_string(fileSize) + " " + std::to_string(chunkSize) + " " + filename + " #radpdl";
-                logClient(socket, "Chunk send: " + header + "\n");
-                send(socket, header.c_str(), header.size(), 0);
-
+                std::cout << "Sending " << bytesRead << " bytes\n";
                 send(socket, buffer.data(), bytesRead, 0);
                 totalBytesSent += bytesRead;
-                // Wait for client to send "OK"
-                waitForClient(socket);
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
             }
 
             logClient(socket, "File send finished");
@@ -191,7 +190,6 @@ namespace ghillie575
             sendMessage(socket, std::string(buffer));
             fclose(file);
         }
-        
     }
     void RADPServerClient::processCommand(int socket, const std::string &command, const std::vector<std::string> &args)
     {
@@ -231,7 +229,7 @@ namespace ghillie575
             if (args.empty())
             {
                 sendMessage(socket, "ERR\n");
-                
+
                 return;
             }
             std::string filePath = args[0];
@@ -307,7 +305,6 @@ namespace ghillie575
     RADPServerClient::RADPServerClient(int buffer_size)
     {
         this->buffer_size = buffer_size;
-
     }
 
     RADPServerClient::~RADPServerClient()

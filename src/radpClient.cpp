@@ -1,6 +1,24 @@
 #include <radp/radp.h>
+#include <iomanip>
 namespace ghillie575
 {
+    void  RADPClient::printProgressBar(double percentage,std::string message) {
+    int barWidth = 50; // Width of the progress bar
+    std::cout << "\r" << message  <<" ["; // Carriage return to overwrite the line
+
+    int pos = static_cast<int>(barWidth * (percentage / 100.0));
+    for (int i = 0; i < barWidth; ++i) {
+        if (i < pos)
+            std::cout << "=";
+        else if (i == pos)
+            std::cout << ">";
+        else
+            std::cout << " ";
+    }
+
+    std::cout << "] " << std::fixed << std::setprecision(2) << percentage << "% " << std::flush;
+}
+
     RADPClient::RADPClient(const std::string &serverAddress, int port)
         : serverAddress(serverAddress), port(port), downloading(false)
     {
@@ -57,7 +75,7 @@ namespace ghillie575
     void RADPClient::sendMessage(const std::string &message)
     {
         send(socket, message.c_str(), message.size(), 0);
-    } 
+    }
 
     std::vector<std::string> RADPClient::splitMessage(const std::string &message)
     {
@@ -72,7 +90,9 @@ namespace ghillie575
     }
     void RADPClient::receiveData()
     {
-        char buffer[2048];
+        int dlSizeTotal = 0;
+        int dlSizeCurrent = 0;
+        char buffer[(1024 * 1024)];
         std::ofstream outputFile;
         while (connected)
         {
@@ -86,42 +106,43 @@ namespace ghillie575
             if (data == "DLF")
             {
                 downloading = false;
-                std::cout << "Download complete\n";
+                std::cout << "\nDownload complete\n";
                 if (outputFile.is_open())
                 {
                     outputFile.close();
                 }
             }
-            if (downloading)
+            else if (downloading)
             {
-
-                size_t headerEnd = data.find("#radpdl");
-                if (headerEnd != std::string::npos)
+                size_t headerStart = data.find("##dl##");
+                size_t headerEnd = data.find("##dl##", headerStart + 6);
+                if (headerStart != std::string::npos && headerEnd != std::string::npos)
                 {
-                    std::string header = data.substr(0, headerEnd + 2);
-                    processHeader(header, &outputFile);
-                    data = data.substr(headerEnd + 2);
+                    std::string header = data.substr(headerStart, headerEnd - headerStart + 6);
+                    dlSizeTotal = processHeader(header, &outputFile);
+                    data = data.substr(headerEnd + 6);
                 }
-                else
+                else if (outputFile.is_open())
                 {
-                    if (outputFile.is_open())
+                    outputFile.write(data.c_str(), data.size());
+                    if (!outputFile)
                     {
-                        outputFile.write(data.c_str(), data.size());
-                        if (!outputFile)
-                        {
-                            std::cerr << "Error writing to file" << std::endl;
-                        }
-                        else
-                        {
-                            std::cout << "Data written to file\n";
-                            sendMessage("OK\n");
-                        }
+                        std::cerr << "Error writing to file" << std::endl;
+                    }
+                    dlSizeCurrent += data.size();
+                    if (dlSizeTotal > 0)
+                    { // Prevent division by zero
+                        double percentage = (static_cast<double>(dlSizeCurrent) / dlSizeTotal) * 100;
+                        printProgressBar(percentage,"Downloading");
                     }
                     else
                     {
-                        std::cerr << "File not open\n";
-                        sendMessage("ERR\n");
+                        std::cout << "Invalid total data size!" << std::endl;
                     }
+                }
+                else
+                {
+                    std::cerr << "File not open\n";
                 }
             }
             else
@@ -148,9 +169,9 @@ namespace ghillie575
                 {
                     downloading = true;
                 }
-                else
+                else if (data == "OK")
                 {
-                    std::cout << data << "\n";
+                    // Do nothing
                 }
             }
         }
@@ -163,41 +184,46 @@ namespace ghillie575
         std::cout << "Disconnected from server\n";
     }
 
-    void RADPClient::processHeader(const std::string &header, std::ofstream *outputFile)
+    long RADPClient::processHeader(const std::string &header, std::ofstream *outputFile)
     {
-        std::vector<std::string> tokens = splitMessage(header);
-        if (tokens.size() < 6 || tokens[0] != "radpdl#")
+        std::istringstream headerStream(header);
+        std::string token;
+        std::vector<std::string> tokens;
+
+        while (headerStream >> token)
         {
-            throw std::runtime_error("Invalid header format");
+            tokens.push_back(token);
         }
 
-        // Debugging output
-        std::cout << "Header tokens: ";
-        for (const auto &token : tokens)
+        if (tokens.size() >= 4 && tokens[0] == "##dl##" && tokens[tokens.size() - 1] == "##dl##")
         {
-            std::cout << token << " ";
-        }
-        std::cout << std::endl;
-
-        long totalBytesSent = std::stol(tokens[1]);
-        long fileSize = std::stol(tokens[2]);
-        size_t chunkSize = std::stoul(tokens[3]);
-        std::string filename = tokens[4];
-
-        std::cout << "Downloading: " << totalBytesSent << "/" << fileSize << " bytes\n";
-
-        if (totalBytesSent == 0)
-        {
-            filename.append(".radpd");
-            if (!outputFile->is_open())
+            try
             {
-                outputFile->open(filename, std::ios::binary);
+                unsigned long fileSize = std::stoul(tokens[1]);
+                std::string fileName = tokens[2];
+                std::cout << "DL " << fileName << ", " << fileSize << " bytes\n";
+                outputFile->open(fileName + ".radpdl", std::ios::binary);
                 if (!outputFile->is_open())
                 {
-                    throw std::runtime_error("Failed to open destination file");
+                    std::cerr << "Failed to open file: " << fileName << std::endl;
                 }
+                return fileSize;
             }
+            catch (const std::invalid_argument &e)
+            {
+                std::cerr << "Invalid argument in header: " << e.what() << std::endl;
+            }
+            catch (const std::out_of_range &e)
+            {
+                std::cerr << "Out of range in header: " << e.what() << std::endl;
+            }
+            return -1;
         }
+        else
+        {
+            std::cerr << "Invalid header format" << std::endl;
+        }
+        return -1;
     }
 
     void RADPClient::downloadFile(const std::string &filename)
