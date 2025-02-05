@@ -73,6 +73,10 @@ namespace ghillie575
             {
                 downloading = false;
                 std::cout << "Download complete\n";
+                if (outputFile.is_open())
+                {
+                    outputFile.close();
+                }
             }
             if (downloading)
             {
@@ -83,20 +87,28 @@ namespace ghillie575
                     std::string header = data.substr(0, headerEnd + 2);
                     processHeader(header, &outputFile);
                     data = data.substr(headerEnd + 2);
-                }else{
+                }
+                else
+                {
                     if (outputFile.is_open())
                     {
                         outputFile.write(data.c_str(), data.size());
                         if (!outputFile)
                         {
                             std::cerr << "Error writing to file" << std::endl;
-                        }else{
+                        }
+                        else
+                        {
+                            std::cout << "Data written to file\n";
                             sendMessage("OK\n");
                         }
-                        
+                    }
+                    else
+                    {
+                        std::cerr << "File not open\n";
+                        sendMessage("ERR\n");
                     }
                 }
-                    
             }
             else
             {
