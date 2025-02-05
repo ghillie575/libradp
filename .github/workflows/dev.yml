@@ -2,9 +2,9 @@ name: C/C++ CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "dev" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "dev" ]
 
 jobs:
   build:
@@ -13,11 +13,39 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: configure
-      run: ./configure
-    - name: make
-      run: make
-    - name: make check
-      run: make check
-    - name: make distcheck
-      run: make distcheck
+    - name: Install CMake
+      run: sudo apt-get install cmake -y
+    - name: Create build directory
+      run: mkdir build
+    - name: Configure with CMake
+      run: cmake -S . -B build
+    - name: Build with CMake
+      run: cmake --build build
+    - name: Run tests
+      run: cd build && ctest
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+      name: executables
+      path: build/
+
+    build-windows:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install CMake
+      run: choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System' --yes
+    - name: Create build directory
+      run: mkdir build
+    - name: Configure with CMake
+      run: cmake -S . -B build
+    - name: Build with CMake
+      run: cmake --build build
+    - name: Run tests
+      run: cd build && ctest
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+      name: executables-windows
+      path: build/
