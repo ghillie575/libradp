@@ -38,23 +38,3 @@ jobs:
         with:
           name: radp.deb
           path: build/debian.deb
-  build-windows:
-    runs-on: windows-latest
-
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install CMake
-        run: choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System' --yes
-      - name: Create build directory
-        run: mkdir build
-      - name: Configure with CMake
-        run: cmake -S . -B build
-      - name: Build with CMake
-        run: cmake --build build
-      - name: Run tests
-        run: cd build && ctest
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: executables-windows-dev
-          path: build/
