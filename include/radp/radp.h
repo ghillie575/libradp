@@ -57,25 +57,27 @@ namespace ghillie575
         int m_port;
 
         int buffer_size = 1024;
-        bool connected = false;
         void processCommand(int socket, const std::string &command, const std::vector<std::string> &args);
         void serverDownload(int socket, std::string filename);
         void onDownload();
         void waitForClient(int socket);
         void serverListFiles(int socket);
         void serverGetFileInfo(int socket, std::string filename);
-        void disconnect(int socket);
         void serverReadString(int socket, std::string filename);
 
     public:
         int id;
+        bool connected = false;
+
         RADPServerClient(int buffer_size);
         ~RADPServerClient();
         void handle(int socket);
-        };
+        void disconnect(int socket);
+    };
     class RADPServer
     {
     private:
+        bool running = true;
         int m_port;
         int buffer_size = 1024;
         int server_socket;
@@ -84,11 +86,14 @@ namespace ghillie575
         std::vector<RADPServerClient *> clients;
         struct sockaddr_in serverAddr, clientAddr;
         socklen_t addrLen = sizeof(clientAddr);
-
+        void clientManaginghread();
+        void runServer();
     public:
         RADPServer(int port);
         ~RADPServer();
+        RADPServer();
         void start();
+        void shutdown();
         void OnDownloadCallback(std::function<void()> callback);
         void FileRequestedCallback(std::function<int()> callback);
     };
@@ -100,7 +105,7 @@ namespace ghillie575
         void downloadFile(const std::string &filename);
         void listFiles();
         void getFileInfo(const std::string &filename);
-        
+
         bool connected = false;
 
     private:
@@ -111,11 +116,12 @@ namespace ghillie575
         std::thread receiverThread;
         void waitForServer();
         void connectToServer();
+        
         void sendMessage(const std::string &message);
         std::vector<std::string> splitMessage(const std::string &message);
         void receiveData();
         long processHeader(const std::string &header, std::ofstream *outputFile);
-        void printProgressBar(double percentage,std::string message);
+        void printProgressBar(double percentage, std::string message);
     };
 }
 

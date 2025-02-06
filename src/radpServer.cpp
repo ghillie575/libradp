@@ -16,9 +16,31 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <sys/socket.h>
 #include <chrono>
+#include <fcntl.h>
 #endif
+void connectToLocalhost(int port)
+{
+    int sock = ::socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0)
+    {
+    }
+
+    struct sockaddr_in serverAddr;
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_port = htons(port);
+    if (inet_pton(AF_INET, "127.0.0.1", &serverAddr.sin_addr) <= 0)
+    {
+    }
+
+    if (connect(sock, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) < 0)
+    {
+    }
+
+    close(sock);
+}
 namespace ghillie575
 {
     std::string radpServerDir = ".";
@@ -151,7 +173,7 @@ namespace ghillie575
             long fileSize = fileStream.tellg();
             fileStream.seekg(0, std::ios::beg);
 
-            const size_t chunkSize = (1024 * 1024) * 10; // Define the chunk size
+            const size_t chunkSize = (1024 * 1024); // Define the chunk size
             std::vector<char> buffer(chunkSize);
             long totalBytesSent = 0;
             std::string header = "##dl## " + std::to_string(fileSize) + " " + filename + " ##dl##";
@@ -166,6 +188,7 @@ namespace ghillie575
                 totalBytesSent += bytesRead;
             }
             logClient(socket, "File send finished");
+            sleep(1); // Wait for client to finish downloading
             sendMessage(socket, RADPCommand::DLF);
             std::cout << "File sent: " << totalBytesSent << " bytes\n";
             fileStream.close();
@@ -235,15 +258,6 @@ namespace ghillie575
     {
         connected = false;
         sendMessage(socket, RADPCommand::DISCONNECTED);
-        if (close(socket) == -1)
-        {
-            std::cerr << "Error closing socket: " << strerror(errno) << std::endl;
-        }
-        else
-        {
-            logClient(socket, "Connection closed\n");
-        }
-        logClient(socket, "Disconnected from client\n");
     }
     void RADPServerClient::serverReadString(int socket, std::string filename)
     {
@@ -299,7 +313,6 @@ namespace ghillie575
                 std::string filename = args[0];
                 onDownload();
                 serverDownload(socket, filename);
-                sleep(1);
                 disconnect(socket);
             }
         }
@@ -325,6 +338,20 @@ namespace ghillie575
             sendMessage(socket, RADPCommand::ERR);
         }
     }
+    RADPServer::RADPServer(){
+
+    }
+    void RADPServer::shutdown()
+    {
+        for (auto client : clients)
+        {
+            client->disconnect(client->id);
+            std::cout << "Disconnecting client " << client->id << std::endl;
+        }
+        std::cout << "Shutting down server\n";
+        close(server_socket);
+        running = false;
+    }
     RADPServer::RADPServer(int port)
     {
         struct sockaddr_in serverAddr, clientAddr;
@@ -339,6 +366,9 @@ namespace ghillie575
         }
 
         // Set up the server address structure
+        int flag = 1;
+        setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, (char *)&flag, sizeof(int)); // Allow socket reuse
+        setsockopt(server_socket, IPPROTO_TCP, TCP_NODELAY, (char *)&flag, sizeof(int)); // Set TCP_NODELAY
         serverAddr.sin_family = AF_INET;
         serverAddr.sin_addr.s_addr = INADDR_ANY; // Accept connections from any IP
         serverAddr.sin_port = htons(port);       // Convert port number to network byte order
@@ -351,23 +381,47 @@ namespace ghillie575
             return;
         }
     }
-    void RADPServer::start()
+    void RADPServer::clientManaginghread()
     {
-        if (listen(server_socket, 5) < 0)
+        while (running)
         {
-            logError("Error listening on socket");
-            close(server_socket);
-            return;
+            for (auto client : clients)
+            {
+                if (!client->connected)
+                {
+                    std::cout << "Removing unused resources for client: " << client->id << "\n";
+                    clients.erase(std::remove(clients.begin(), clients.end(), client), clients.end());
+                    delete client;
+                }
+            }
+            sleep(1);
         }
-        logInfo("RADP Server listening on port " + std::to_string(m_port));
-        while (true)
+    }
+    void RADPServer::runServer()
+    {
+        // Set the server socket to non-blocking mode
+        int flags = fcntl(server_socket, F_GETFL, 0);
+        fcntl(server_socket, F_SETFL, flags | O_NONBLOCK);
+
+        while (running)
         {
             int clientSocket = accept(server_socket, (struct sockaddr *)&clientAddr, &addrLen);
             if (clientSocket < 0)
             {
-                logError("Error accepting client connection");
-                continue;
+                if (errno == EWOULDBLOCK)
+                {
+                    // No incoming connections, continue
+                    usleep(100000); // Sleep for 100ms to avoid busy-waiting
+                    continue;
+                }
+                if (running)
+                {
+                    logError("Error accepting client connection");
+                }
+                break;
             }
+            int flag = 1;
+            setsockopt(clientSocket, IPPROTO_TCP, TCP_NODELAY, (char *)&flag, sizeof(int));
 
             logClient(clientSocket, "Client connected");
 
@@ -379,10 +433,27 @@ namespace ghillie575
                                      { client->handle(clientSocket); });
             clientThread.detach(); // Detach the thread to allow it to run independently
         }
+        close(server_socket);
     }
+    void RADPServer::start()
+    {
 
+        if (listen(server_socket, 5) < 0)
+        {
+            logError("Error listening on socket");
+            close(server_socket);
+            return;
+        }
+        logInfo("RADP Server listening on port " + std::to_string(m_port));
+        std::thread clientManagerThread([this]()
+                                        { clientManaginghread(); });
+        runServer();
+        clientManagerThread.join();
+        return;
+    }
     RADPServer::~RADPServer()
     {
+        shutdown();
     }
     RADPServerClient::RADPServerClient(int buffer_size)
     {
@@ -412,19 +483,20 @@ namespace ghillie575
                 std::string command = tokens[0];
                 std::vector<std::string> args(tokens.begin() + 1, tokens.end());
                 processCommand(socket, command, args);
-                if (command == "EXIT")
+                if (connected == false)
                 {
-                    disconnect(socket);
+                    close(socket);
                 }
             }
         }
 
-        if (bytesRead < 0)
+        if (connected && bytesRead < 0)
         {
             logError("Error reading from client socket");
         }
 
         close(socket);
         logClient(id, "Client disconnected");
+        connected = false;
     }
 }

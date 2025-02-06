@@ -1,7 +1,9 @@
 #include <radp/radp.h>
 #include <iomanip>
+#include <netinet/tcp.h> // Include this header for TCP_NODELAY
 namespace ghillie575
 {
+  
     void RADPClient::printProgressBar(double percentage, std::string message)
     {
         int barWidth = 50;                    // Width of the progress bar
@@ -58,7 +60,8 @@ namespace ghillie575
         {
             throw std::runtime_error("Error creating socket");
         }
-
+        int flag = 1;
+        setsockopt(socket, IPPROTO_TCP, TCP_NODELAY, (char *)&flag, sizeof(int)); // Set TCP_NODELAY
         struct sockaddr_in serverAddr;
         serverAddr.sin_family = AF_INET;
         serverAddr.sin_port = htons(port);
@@ -92,7 +95,7 @@ namespace ghillie575
     }
     void RADPClient::receiveData()
     {
-        int dlSizeTotal = 0;
+        int dlSizeTotal = 1;
         int dlSizeCurrent = 0;
         char buffer[(1024 * 1024)];
         std::ofstream outputFile;
@@ -106,17 +109,8 @@ namespace ghillie575
             }
 
             std::string data(buffer, bytesRead);
-            if (data == "DLF")
-            {
-                downloading = false;
-                std::cout << "\nDownload complete\n";
-                if (outputFile.is_open())
-                {
-                    outputFile.close();
-                }
-                sendMessage("OK\n");
-            }
-            else if (downloading)
+
+            if (downloading && dlSizeCurrent < dlSizeTotal)
             {
                 size_t headerStart = data.find("##dl##");
                 size_t headerEnd = data.find("##dl##", headerStart + 6);
@@ -130,6 +124,7 @@ namespace ghillie575
                 // Write data to file immediately
                 if (outputFile.is_open())
                 {
+                    //std::cout << "Writing " << data.size() << " bytes\n";
                     outputFile.write(data.c_str(), data.size());
                     if (!outputFile)
                     {
@@ -139,8 +134,17 @@ namespace ghillie575
 
                     if (dlSizeTotal > 0)
                     { // Prevent division by zero
-                        double percentage = (static_cast<double>(dlSizeCurrent) / dlSizeTotal) * 100;
-                        printProgressBar(percentage, "Downloading");
+                        if (dlSizeCurrent >= dlSizeTotal)
+                        {
+                            printProgressBar(100, "Done");
+                            downloading = false;
+                            outputFile.close();
+                        }
+                        else
+                        {
+                            double percentage = (static_cast<double>(dlSizeCurrent) / dlSizeTotal) * 100;
+                            printProgressBar(percentage, "Downloading");
+                        }
                     }
                     else
                     {
@@ -157,6 +161,7 @@ namespace ghillie575
                 trimMessage(data);
                 if (data == "DISCONNECTED")
                 {
+                    std::cout << "Server disconnected\n";
                     connected = false;
                     break;
                 }
@@ -175,6 +180,11 @@ namespace ghillie575
                 else if (data == "DLST")
                 {
                     downloading = true;
+                }
+                else if (data == "DLF")
+                {
+                    downloading = false;
+                    std::cout << "\nDownload complete\n";
                 }
                 else if (data == "OK")
                 {
