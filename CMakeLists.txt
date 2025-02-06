@@ -13,15 +13,17 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 file(GLOB_RECURSE SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
 
 # Add library
-add_library(radp SHARED ${SRC})
+add_library(libradp SHARED ${SRC})
 
 # Add executables
 add_executable(radp_test main.cpp ${SRC})
 add_executable(radp_test_c main-c.cpp ${SRC})
+add_executable(radp main_radp.cpp ${SRC})
 # Include directories for targets
-target_include_directories(radp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(libradp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(radp_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(radp_test_c PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(radp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 # Enable testing
 include(CTest)

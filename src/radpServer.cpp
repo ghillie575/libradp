@@ -183,7 +183,6 @@ namespace ghillie575
             while (fileStream.read(buffer.data(), chunkSize) || fileStream.gcount() > 0)
             {
                 size_t bytesRead = fileStream.gcount();
-                std::cout << "Sending " << bytesRead << " bytes\n";
                 send(socket, buffer.data(), bytesRead, 0);
                 totalBytesSent += bytesRead;
             }
@@ -232,6 +231,7 @@ namespace ghillie575
             }
             closedir(dir);
         }
+        logClient(socket, "Sending file list");
         sendMessage(socket, result);
     }
     void RADPServerClient::serverGetFileInfo(int socket, std::string filename)
@@ -242,7 +242,8 @@ namespace ghillie575
         {
             if (S_ISREG(fileStat.st_mode))
             {
-                sendMessage(socket, "FILE " + std::to_string(fileStat.st_size) + "\n");
+                logClient(socket, "Sending file info");
+                sendMessage(socket, "FILE " + filename + " " + std::to_string(fileStat.st_size) + "\n");
             }
             else
             {

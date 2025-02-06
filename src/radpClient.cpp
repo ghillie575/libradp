@@ -41,13 +41,13 @@ namespace ghillie575
     void RADPClient::waitForServer()
     {
         char buffer[1024];
-        size_t bytesRead;
+        ssize_t bytesRead;
         while ((bytesRead = read(socket, buffer, sizeof(buffer) - 1)) > 0)
         {
             buffer[bytesRead] = '\0'; // Null-terminate the string
             std::string message(buffer);
             trimMessage(message);
-            if (message == "OK")
+            if (!message.empty())
             {
                 break;
             }
@@ -76,7 +76,10 @@ namespace ghillie575
         }
         connected = true;
     }
-
+    void RADPClient::sendMessage(RADPCommand command)
+    {
+        sendMessage(commandToString(command));
+    }
     void RADPClient::sendMessage(const std::string &message)
     {
         send(socket, message.c_str(), message.size(), 0);
@@ -137,6 +140,7 @@ namespace ghillie575
                         if (dlSizeCurrent >= dlSizeTotal)
                         {
                             printProgressBar(100, "Done");
+                            std::cout << std::endl;
                             downloading = false;
                             outputFile.close();
                         }
@@ -159,36 +163,35 @@ namespace ghillie575
             else
             {
                 trimMessage(data);
-                if (data == "DISCONNECTED")
+                RADPCommand cmd = stringToCommand(data);
+                switch (cmd)
                 {
-                    std::cout << "Server disconnected\n";
+                case RADPCommand::DISCONNECTED:
+                    std::cout << "Server disconnecting\n";
                     connected = false;
                     break;
-                }
-                else if (data == "ACSDN")
-                {
+                case RADPCommand::ACSDN:
                     std::cout << "Access Denied\n";
-                }
-                else if (data == "UKN")
-                {
-                    std::cout << "Unknown command\n";
-                }
-                else if (data == "NF")
-                {
+                    break;
+                case RADPCommand::UKN:
+                    std::cout << data << std::endl;
+                    break;
+                case RADPCommand::NF:
                     std::cout << "File not found\n";
-                }
-                else if (data == "DLST")
-                {
+                    break;
+                case RADPCommand::DLST:
                     downloading = true;
-                }
-                else if (data == "DLF")
-                {
+                    break;
+                case RADPCommand::DLF:
                     downloading = false;
                     std::cout << "\nDownload complete\n";
-                }
-                else if (data == "OK")
-                {
+                    break;
+                case RADPCommand::OK:
                     // Do nothing
+                    break;
+                default:
+                    std::cout << "Unhandled command\n";
+                    break;
                 }
             }
         }
@@ -198,7 +201,7 @@ namespace ghillie575
             outputFile.close();
         }
         connected = false;
-        std::cout << "Disconnected from server\n";
+        std::cout << "Connection closed\n";
     }
 
     long RADPClient::processHeader(const std::string &header, std::ofstream *outputFile)
@@ -223,7 +226,9 @@ namespace ghillie575
                 if (!outputFile->is_open())
                 {
                     std::cerr << "Failed to open file: " << fileName << std::endl;
+                    return -1;
                 }
+                std::cout << "Saving to: " << fileName << ".radpdl\n";
                 return fileSize;
             }
             catch (const std::invalid_argument &e)
@@ -242,7 +247,12 @@ namespace ghillie575
         }
         return -1;
     }
-
+    void RADPClient::disconnect()
+    {
+        connected = false;
+        sendMessage("EXIT\n");
+        close(socket);
+    }
     void RADPClient::downloadFile(const std::string &filename)
     {
         sendMessage("DL " + filename + "\n");

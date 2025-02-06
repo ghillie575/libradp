@@ -2,50 +2,59 @@ name: C/C++ CI
 
 on:
   push:
-    branches: [ "dev" ]
+    branches: ["dev"]
   pull_request:
-    branches: [ "dev" ]
+    branches: ["dev"]
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Install CMake
-      run: sudo apt-get install cmake -y
-    - name: Create build directory
-      run: mkdir build
-    - name: Configure with CMake
-      run: cmake -S . -B build
-    - name: Build with CMake
-      run: cmake --build build
-    - name: Run tests
-      run: cd build && ctest
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: executables-linux-dev
-        path: build/
-
+      - uses: actions/checkout@v4
+      - name: Install CMake
+        run: sudo apt-get install cmake -y
+      - name: Create build directory
+        run: mkdir build
+      - name: Configure with CMake
+        run: cmake -S . -B build
+      - name: Build with CMake
+        run: cmake --build build
+      - name: Run tests
+        run: cd build && ctest
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: executables-linux-dev
+          path: build/
+      - name: Install dpkg-dev
+        run: sudo apt-get install dpkg-dev -y
+      - name: Build .deb package
+        run: |
+          cp build/radp deb/usr/bin
+          dpkg-deb --build deb
+      - name: Upload .deb package
+        uses: actions/upload-artifact@v4
+        with:
+          name: radp.deb
+          path: build/debian.deb
   build-windows:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Install CMake
-      run: choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System' --yes
-    - name: Create build directory
-      run: mkdir build
-    - name: Configure with CMake
-      run: cmake -S . -B build
-    - name: Build with CMake
-      run: cmake --build build
-    - name: Run tests
-      run: cd build && ctest
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: executables-windows-dev
-        path: build/
+      - uses: actions/checkout@v4
+      - name: Install CMake
+        run: choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System' --yes
+      - name: Create build directory
+        run: mkdir build
+      - name: Configure with CMake
+        run: cmake -S . -B build
+      - name: Build with CMake
+        run: cmake --build build
+      - name: Run tests
+        run: cd build && ctest
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: executables-windows-dev
+          path: build/

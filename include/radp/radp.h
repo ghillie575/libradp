@@ -105,7 +105,9 @@ namespace ghillie575
         void downloadFile(const std::string &filename);
         void listFiles();
         void getFileInfo(const std::string &filename);
-
+        void getString(const std::string &filename);
+        void waitForServer();
+        void disconnect();
         bool connected = false;
 
     private:
@@ -114,10 +116,10 @@ namespace ghillie575
         int port;
         bool downloading;
         std::thread receiverThread;
-        void waitForServer();
-        void connectToServer();
         
+        void connectToServer();
         void sendMessage(const std::string &message);
+        void sendMessage(RADPCommand command);
         std::vector<std::string> splitMessage(const std::string &message);
         void receiveData();
         long processHeader(const std::string &header, std::ofstream *outputFile);

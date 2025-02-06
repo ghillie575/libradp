@@ -1,0 +1,13 @@
+Package: radp
+Version: 1.0.0
+Architecture: all      
+Essential: no           
+Priority: optional      
+Depends: libc6, libstdc++6, libboost-system1.71.0, libboost-thread1.71.0
+Maintainer: ghillie575
+Description: RADP client
+ RADP client is a simple client for the RADP server.
+ .
+ It allows to send and receive files from the server.
+ .
+ This package is part of the RADP project.
