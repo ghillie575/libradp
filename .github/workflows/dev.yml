@@ -29,6 +29,9 @@ jobs:
         run: sudo apt-get install dpkg-dev -y
       - name: Build .deb package
         run: |
+          mkdir -p deb/DEBIAN
+          mkdir -p deb/usr/bin
+          cp ./control-deb deb/DEBIAN/control
           cp ./build/radp ./deb/usr/bin
           dpkg-deb --build ./deb
       - name: Upload .deb package
