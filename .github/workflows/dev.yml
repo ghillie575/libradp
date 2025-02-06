@@ -38,4 +38,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: radp.deb
-          path: build/deb.deb
+          path: deb.deb
