@@ -34,18 +34,14 @@ namespace ghillie575
     enum class RADPCommand
     {
         EXIT,
-        LS,
-        GETS,
-        GETF,
         DISCONNECTED,
-        OK,
         ERR,
         NF,
-        FILE,
         ACSDN,
         DLF,
         DLST,
         DL,
+        END,
         UKN
     };
     std::string commandToString(RADPCommand command);
@@ -61,10 +57,6 @@ namespace ghillie575
         void serverDownload(int socket, std::string filename);
         void onDownload();
         void waitForClient(int socket);
-        void serverListFiles(int socket);
-        void serverGetFileInfo(int socket, std::string filename);
-        void serverReadString(int socket, std::string filename);
-
     public:
         int id;
         bool connected = false;
@@ -95,7 +87,6 @@ namespace ghillie575
         void start();
         void shutdown();
         void OnDownloadCallback(std::function<void()> callback);
-        void FileRequestedCallback(std::function<int()> callback);
     };
     class RADPClient
     {
@@ -107,6 +98,7 @@ namespace ghillie575
         void getFileInfo(const std::string &filename);
         void getString(const std::string &filename);
         void waitForServer();
+        void waitForDownload();
         void disconnect();
         bool connected = false;
 

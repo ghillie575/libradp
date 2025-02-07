@@ -3,7 +3,7 @@
 #include <netinet/tcp.h> // Include this header for TCP_NODELAY
 namespace ghillie575
 {
-  
+
     void RADPClient::printProgressBar(double percentage, std::string message)
     {
         int barWidth = 50;                    // Width of the progress bar
@@ -22,7 +22,14 @@ namespace ghillie575
 
         std::cout << "] " << std::fixed << std::setprecision(2) << percentage << "% " << std::flush;
     }
-
+    void RADPClient::waitForDownload()
+    {
+        while (downloading)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+        std::cout << "DL_F" <<  std::endl;
+    }
     RADPClient::RADPClient(const std::string &serverAddress, int port)
         : serverAddress(serverAddress), port(port), downloading(false)
     {
@@ -47,7 +54,7 @@ namespace ghillie575
             buffer[bytesRead] = '\0'; // Null-terminate the string
             std::string message(buffer);
             trimMessage(message);
-            if (!message.empty())
+            if (message == "EOF")
             {
                 break;
             }
@@ -100,6 +107,7 @@ namespace ghillie575
     {
         int dlSizeTotal = 1;
         int dlSizeCurrent = 0;
+        bool headerReceived = false;
         char buffer[(1024 * 1024)];
         std::ofstream outputFile;
 
@@ -117,21 +125,23 @@ namespace ghillie575
             {
                 size_t headerStart = data.find("##dl##");
                 size_t headerEnd = data.find("##dl##", headerStart + 6);
-                if (headerStart != std::string::npos && headerEnd != std::string::npos)
+                if (!headerReceived && headerStart != std::string::npos && headerEnd != std::string::npos)
                 {
                     std::string header = data.substr(headerStart, headerEnd - headerStart + 6);
                     dlSizeTotal = processHeader(header, &outputFile);
                     data = data.substr(headerEnd + 6);
+                    headerReceived = true;
                 }
 
                 // Write data to file immediately
                 if (outputFile.is_open())
                 {
-                    //std::cout << "Writing " << data.size() << " bytes\n";
+                    // std::cout << "Writing " << data.size() << " bytes\n";
                     outputFile.write(data.c_str(), data.size());
                     if (!outputFile)
                     {
                         std::cerr << "Error writing to file" << std::endl;
+                        break;
                     }
                     dlSizeCurrent += data.size();
 
@@ -142,6 +152,9 @@ namespace ghillie575
                             printProgressBar(100, "Done");
                             std::cout << std::endl;
                             downloading = false;
+                            headerReceived = false;
+                            dlSizeCurrent = 0;
+                            dlSizeTotal = 1;
                             outputFile.close();
                         }
                         else
@@ -158,6 +171,7 @@ namespace ghillie575
                 else
                 {
                     std::cerr << "File not open\n";
+                    break; // Break out of loop
                 }
             }
             else
@@ -186,8 +200,10 @@ namespace ghillie575
                     downloading = false;
                     std::cout << "\nDownload complete\n";
                     break;
-                case RADPCommand::OK:
-                    // Do nothing
+                case RADPCommand::ERR:
+                    std::cout << "Error\n";
+                    break;
+                case RADPCommand::END:
                     break;
                 default:
                     std::cout << "Unhandled command\n";
@@ -256,15 +272,7 @@ namespace ghillie575
     void RADPClient::downloadFile(const std::string &filename)
     {
         sendMessage("DL " + filename + "\n");
-    }
-
-    void RADPClient::listFiles()
-    {
-        sendMessage("LS");
-    }
-
-    void RADPClient::getFileInfo(const std::string &filename)
-    {
-        sendMessage("GETF " + filename + "\n");
+        sleep(1); // Wait for server to prepare for download
+        waitForDownload();
     }
 }

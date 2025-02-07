@@ -21,26 +21,6 @@
 #include <chrono>
 #include <fcntl.h>
 #endif
-void connectToLocalhost(int port)
-{
-    int sock = ::socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0)
-    {
-    }
-
-    struct sockaddr_in serverAddr;
-    serverAddr.sin_family = AF_INET;
-    serverAddr.sin_port = htons(port);
-    if (inet_pton(AF_INET, "127.0.0.1", &serverAddr.sin_addr) <= 0)
-    {
-    }
-
-    if (connect(sock, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) < 0)
-    {
-    }
-
-    close(sock);
-}
 namespace ghillie575
 {
     std::string radpServerDir = ".";
@@ -85,22 +65,12 @@ namespace ghillie575
         {
         case RADPCommand::EXIT:
             return "EXIT";
-        case RADPCommand::LS:
-            return "LS";
-        case RADPCommand::GETS:
-            return "GETS";
-        case RADPCommand::GETF:
-            return "GETF";
         case RADPCommand::DISCONNECTED:
             return "DISCONNECTED";
-        case RADPCommand::OK:
-            return "OK";
         case RADPCommand::ERR:
             return "ERR";
         case RADPCommand::NF:
             return "NF";
-        case RADPCommand::FILE:
-            return "FILE";
         case RADPCommand::ACSDN:
             return "ACSDN";
         case RADPCommand::DLF:
@@ -109,6 +79,8 @@ namespace ghillie575
             return "DLST";
         case RADPCommand::DL:
             return "DL";
+        case RADPCommand::END:
+            return "EOF";
         default:
             return "UKN";
         }
@@ -117,22 +89,12 @@ namespace ghillie575
     {
         if (commandStr == "EXIT")
             return RADPCommand::EXIT;
-        else if (commandStr == "LS")
-            return RADPCommand::LS;
-        else if (commandStr == "GETS")
-            return RADPCommand::GETS;
-        else if (commandStr == "GETF")
-            return RADPCommand::GETF;
         else if (commandStr == "DISCONNECTED")
             return RADPCommand::DISCONNECTED;
-        else if (commandStr == "OK")
-            return RADPCommand::OK;
         else if (commandStr == "ERR")
             return RADPCommand::ERR;
         else if (commandStr == "NF")
             return RADPCommand::NF;
-        else if (commandStr == "FILE")
-            return RADPCommand::FILE;
         else if (commandStr == "ACSDN")
             return RADPCommand::ACSDN;
         else if (commandStr == "DLF")
@@ -141,6 +103,8 @@ namespace ghillie575
             return RADPCommand::DLST;
         else if (commandStr == "DL")
             return RADPCommand::DL;
+        else if (commandStr == "EOF")
+            return RADPCommand::END;
         else
             return RADPCommand::UKN;
     }
@@ -211,78 +175,10 @@ namespace ghillie575
             }
         }
     }
-    void RADPServerClient::serverListFiles(int socket)
-    {
-
-        std::string result = "";
-        struct stat fileStat;
-        DIR *dir;
-        struct dirent *ent;
-        if ((dir = opendir(radpServerDir.c_str())) != NULL)
-        {
-            while ((ent = readdir(dir)) != NULL)
-            {
-                if (stat(ent->d_name, &fileStat) == -1)
-                {
-                    continue;
-                }
-                result += ent->d_name;
-                result += "\n";
-            }
-            closedir(dir);
-        }
-        logClient(socket, "Sending file list");
-        sendMessage(socket, result);
-    }
-    void RADPServerClient::serverGetFileInfo(int socket, std::string filename)
-    {
-        std::string fullPath = radpServerDir + "/" + filename;
-        struct stat fileStat;
-        if (stat(fullPath.c_str(), &fileStat) == 0)
-        {
-            if (S_ISREG(fileStat.st_mode))
-            {
-                logClient(socket, "Sending file info");
-                sendMessage(socket, "FILE " + filename + " " + std::to_string(fileStat.st_size) + "\n");
-            }
-            else
-            {
-                sendMessage(socket, RADPCommand::NF);
-            }
-        }
-        else
-        {
-            sendMessage(socket, RADPCommand::NF);
-        }
-    }
     void RADPServerClient::disconnect(int socket)
     {
         connected = false;
         sendMessage(socket, RADPCommand::DISCONNECTED);
-    }
-    void RADPServerClient::serverReadString(int socket, std::string filename)
-    {
-        std::string path = radpServerDir + filename;
-        if (path.find("..") != std::string::npos)
-        {
-            sendMessage(socket, RADPCommand::ACSDN);
-            return;
-        }
-        FILE *file = fopen(path.c_str(), "r");
-        if (file == NULL)
-        {
-            sendMessage(socket, RADPCommand::NF);
-        }
-        else
-        {
-            fseek(file, 0, SEEK_END);
-            long fileSize = ftell(file);
-            rewind(file);
-            char *buffer = (char *)malloc(fileSize);
-            fread(buffer, 1, fileSize, file);
-            sendMessage(socket, std::string(buffer));
-            fclose(file);
-        }
     }
     void RADPServerClient::processCommand(int socket, const std::string &command, const std::vector<std::string> &args)
     {
@@ -291,22 +187,6 @@ namespace ghillie575
         {
             disconnect(socket);
         }
-        else if (cmd == RADPCommand::LS)
-        {
-            serverListFiles(socket);
-        }
-        else if (cmd == RADPCommand::GETS)
-        {
-            if (args.size() == 1)
-            {
-                std::string filename = args[0];
-                serverReadString(socket, filename);
-            }
-            else
-            {
-                sendMessage(socket, RADPCommand::ERR);
-            }
-        }
         else if (cmd == RADPCommand::DL)
         {
             if (args.size() == 1)
@@ -314,33 +194,15 @@ namespace ghillie575
                 std::string filename = args[0];
                 onDownload();
                 serverDownload(socket, filename);
-                disconnect(socket);
             }
-        }
-        else if (cmd == RADPCommand::GETF)
-        {
-            if (args.empty())
-            {
-                sendMessage(socket, RADPCommand::ERR);
-                return;
-            }
-            std::string filePath = args[0];
-
-            // Check if the file path attempts to access parent directory
-            if (filePath.find("..") != std::string::npos)
-            {
-                sendMessage(socket, RADPCommand::ACSDN);
-                return;
-            }
-            serverGetFileInfo(socket, filePath);
         }
         else
         {
             sendMessage(socket, RADPCommand::ERR);
         }
     }
-    RADPServer::RADPServer(){
-
+    RADPServer::RADPServer()
+    {
     }
     void RADPServer::shutdown()
     {

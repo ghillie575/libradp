@@ -1,39 +1,19 @@
-#include <radp/radp.h>
 #include <iostream>
+#include <vector>
 #include <string>
+#include <filesystem>
+#include <radp/radp.h>
+
+namespace fs = std::filesystem;
 
 void printUsage(const std::string &programName)
 {
-    std::cout << "Usage: " << programName << " <server_address> <port> <command> [<args>]\n";
-    std::cout << "Commands:\n";
-    std::cout << "  list                     List files\n";
-    std::cout << "  download <filename>      Download file\n";
-    std::cout << "  info <filename>          Get file info\n";
-}
-
-void executeCommand(ghillie575::RADPClient &client, const std::string &command, const std::string &arg = "")
-{
-    if (command == "list")
-    {
-        client.listFiles();
-    }
-    else if (command == "download")
-    {
-        client.downloadFile(arg);
-    }
-    else if (command == "info")
-    {
-        client.getFileInfo(arg);
-    }
-    else
-    {
-        std::cerr << "Error: Unknown command\n";
-    }
+    std::cout << "Usage: " << programName << " <server> <port> <target_dir> <file1> [<file2> ... <fileN>]\n";
 }
 
 int main(int argc, char *argv[])
 {
-    if (argc < 4)
+    if (argc < 5)
     {
         printUsage(argv[0]);
         return 1;
@@ -41,35 +21,37 @@ int main(int argc, char *argv[])
 
     std::string serverAddress = argv[1];
     int port = std::stoi(argv[2]);
-    std::string command = argv[3];
-    std::string arg = (argc > 4 && argv[4][0] != '-') ? argv[4] : "";
+    std::string targetDir = argv[3];
+
+    // Ensure the target directory exists
+    if (!fs::exists(targetDir))
+    {
+        std::cerr << "Target directory does not exist: " << targetDir << std::endl;
+        return 1;
+    }
+
+    std::vector<std::string> filesToDownload;
+    for (int i = 4; i < argc; ++i)
+    {
+        filesToDownload.push_back(argv[i]);
+    }
+
     try
     {
         ghillie575::RADPClient client(serverAddress, port);
 
-        executeCommand(client, command, arg);
-        std::string input;
-        while (true)
+        for (const auto &file : filesToDownload)
         {
-            sleep(1);
-            std::cout << "Enter command (list, download <filename>, info <filename>, exit): ";
-            std::getline(std::cin, input);
-            if (input == "exit")
-            {
-                client.disconnect();
-                break;
-            }
+            std::cout << "Downloading file: " << file << std::endl;
+            client.downloadFile(file);
 
-            std::istringstream iss(input);
-            std::string cmd, argument;
-            iss >> cmd;
-            iss >> argument;
-
-            executeCommand(client, cmd, argument);
-
-            // Allow some time for the client to process commands
-            std::this_thread::sleep_for(std::chrono::seconds(1));
+            // Move the downloaded file to the target directory
+            std::string downloadedFile = file + ".radpdl";
+            fs::path targetPath = fs::path(targetDir) / fs::path(file);
+            std::cout << "File saved to: " << targetPath << std::endl;
         }
+
+        client.disconnect();
     }
     catch (const std::exception &e)
     {
