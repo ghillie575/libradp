@@ -1,0 +1,41 @@
+name: C/C++ CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install CMake
+        run: sudo apt-get install cmake -y
+      - name: Create build directory
+        run: mkdir build
+      - name: Configure with CMake
+        run: cmake -S . -B build
+      - name: Build with CMake
+        run: cmake --build build
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: executables-linux-dev
+          path: build/
+      - name: Install dpkg-dev
+        run: sudo apt-get install dpkg-dev -y
+      - name: Build .deb package
+        run: |
+          mkdir -p deb/DEBIAN
+          mkdir -p deb/usr/bin
+          cp ./control-deb deb/DEBIAN/control
+          cp ./build/radp ./deb/usr/bin
+          dpkg-deb --build ./deb
+      - name: Upload .deb package
+        uses: actions/upload-artifact@v4
+        with:
+          name: radp.deb
+          path: deb.deb
