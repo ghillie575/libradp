@@ -219,7 +219,7 @@ namespace ghillie575
     {
         struct sockaddr_in serverAddr, clientAddr;
         socklen_t addrLen = sizeof(clientAddr);
-        this->m_port = port;
+        this->m_port = port; 
         // Create socket
         this->server_socket = socket(AF_INET, SOCK_STREAM, 0);
         if (server_socket < 0)

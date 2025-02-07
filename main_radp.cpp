@@ -18,9 +18,19 @@ int main(int argc, char *argv[])
         printUsage(argv[0]);
         return 1;
     }
-
     std::string serverAddress = argv[1];
-    int port = std::stoi(argv[2]);
+    int port = 5172;
+    try
+    {
+        port = std::stoi(argv[2]);
+    }
+    catch(const std::exception& e)
+    {
+        std::cerr << "Invalid port number: " << argv[2] << std::endl;
+        return 1;
+    }
+    
+    
     std::string targetDir = argv[3];
 
     // Ensure the target directory exists
@@ -38,8 +48,9 @@ int main(int argc, char *argv[])
 
     try
     {
+        std::cout << "Connecting to server: " << serverAddress << ":" << port << std::endl;
         ghillie575::RADPClient client(serverAddress, port);
-
+        
         for (const auto &file : filesToDownload)
         {
             std::cout << "Downloading file: " << file << std::endl;
